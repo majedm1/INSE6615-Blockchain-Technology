@@ -1,0 +1,117 @@
+// SPDX-License-Identifier: GPL-3.0
+
+
+pragma solidity >=0.8.0 <0.9.0;
+
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract INSE6615 is ERC721Enumerable, Ownable {
+    using Strings for uint256;
+
+    string public baseURI;
+    string public baseExtension = ".json";
+    uint256 public costPre = 0.00001 ether;
+    uint256 public costPublic = 0.00001 ether;
+    uint256 public maxSupply = 20; // max total nft
+
+
+// Whitelist
+    bool public publicMintActive = false;
+    bool public whiteListMintActive = false;
+
+    mapping(address => bool) public whitelisted;
+
+
+    constructor (
+        string memory _name, // token name
+        string memory _symbol, // token symbol
+        string memory _initBaseURI // token metdata
+    )
+
+    ERC721(_name, _symbol) {
+        setBaseURI(_initBaseURI);
+        //mint (msg.sender, 6); // mint at the initial run
+    }
+
+    function _baseURI() internal view virtual override returns (string memory) {
+        return baseURI;
+    }
+    
+    function whitelistMint (uint256 _mintAmount) public payable {
+        require(whiteListMintActive, "White List Mint Has Not Been Actived");
+        require(whitelisted[msg.sender], "You are not permitted, you are not on our whitelist");
+        require(msg.value >= costPre * _mintAmount, "There is no enough ETH to perform your transaction");
+        internalMint(_mintAmount);
+    }
+
+    function publicMint(uint256 _mintAmount) public payable {
+        require(publicMintActive, "Public Mint is still not available");
+        require(msg.value >= costPublic * _mintAmount, "There is no enough ETH to perform your transaction");
+        internalMint(_mintAmount);
+    }
+
+
+    function internalMint(uint256 _mintAmount) internal {
+        uint256 supply = totalSupply();
+        require(_mintAmount > 0, "1 NFT should be Mint");
+        require(supply + _mintAmount <= maxSupply, "Max Supply Has been Exceeded");
+
+        for (uint256 i = 1; i <= _mintAmount; i++) {
+            _safeMint(msg.sender, supply + i);
+        }
+    }
+
+
+    function walletofOwner (address _owner) public view returns (uint256[] memory)
+    {
+        uint256 ownerTokenCount = balanceOf(_owner);
+        uint256[] memory tokenIds = new uint256[](ownerTokenCount);
+        for (uint256 i; i < ownerTokenCount; i++) {
+            tokenIds[i] = tokenOfOwnerByIndex(_owner, i);
+        }
+        return tokenIds;
+    }
+
+    function tokenURI(uint256 tokenId) public view virtual override returns (string memory)
+    {
+        require(_exists(tokenId), "ERC721Metadata: URI query for nonexistent token");
+        
+        string memory currentBaseURI = _baseURI();
+        return bytes(currentBaseURI).length > 0
+        ? string(abi.encodePacked(currentBaseURI,tokenId.toString(),baseExtension))
+        : "";
+    }
+
+
+    function editMintState (
+        bool _publicMintActive, bool _whiteListMintActive
+    ) external onlyOwner {
+        publicMintActive = _publicMintActive;
+        whiteListMintActive = _whiteListMintActive;
+    }
+
+
+    function setWhiteList(address[] calldata addresses) external onlyOwner {
+        for (uint256 i =0; i< addresses.length; i++){
+            whitelisted[addresses[i]] = true;
+        }
+    }
+
+
+    function withdraw(address _addr) external onlyOwner {
+
+        uint balance = address(this).balance;
+        payable(_addr).transfer(balance);
+    }
+
+
+    function setBaseURI(string memory _newBaseURI) public onlyOwner {
+        baseURI = _newBaseURI;
+    }
+
+    function setBaseExtension(string memory _newBaseExtension) public onlyOwner {
+        baseExtension = _newBaseExtension;
+    }
+}
+
